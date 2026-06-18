@@ -10,3 +10,5 @@ wheels/
 .venv
 
 cvelistV5/
+
+.env
