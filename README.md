@@ -44,9 +44,12 @@ cvelistV5 (git submodule)
 ## Setup
 
 ```bash
-# Clone with submodules
-git clone --recurse-submodules git@github.com:khazarih/chromium-cves.git
+# Clone
+git clone git@github.com:khazarih/chromium-cves.git
 cd chromium-cves
+
+# Clone cvelistV5 data (required)
+git clone https://github.com/CVEProject/cvelistV5.git
 
 # Install dependencies
 uv sync
@@ -135,5 +138,5 @@ All settings via environment variables (`.env`):
 ├── DESIGN.md           # Detailed architecture docs
 ├── pyproject.toml
 ├── .env
-└── cvelistV5/          # CVE data (git submodule)
+└── cvelistV5/          # CVE data (separate clone)
 ```
