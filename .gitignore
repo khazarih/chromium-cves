@@ -9,6 +9,7 @@ wheels/
 # Virtual environments
 .venv
 
-cvelistV5/
 
+cvelistV5/
 .env
+cves/*

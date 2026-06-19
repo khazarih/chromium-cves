@@ -1,0 +1,12 @@
+services:
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "${CHROMA_PORT:-8000}:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=False
+
+volumes:
+  chroma-data:
