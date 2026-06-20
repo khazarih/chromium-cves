@@ -137,6 +137,9 @@ def process_dir(args):
         ]
         severity = infer_severity(description, vuln_types)
 
+        if severity == "LOW":
+            continue
+
         metadata = {
             "date_published": meta.get("datePublished", ""),
             "state": meta.get("state", ""),

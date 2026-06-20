@@ -3,8 +3,9 @@ import argparse
 from db import query_cves, query_patches, get_cve_metadata
 
 
-def search_cves(query, n=5):
-    results = query_cves(query, n_results=n)
+def search_cves(query, n=5, severity=None):
+    where = {"severity": severity} if severity else None
+    results = query_cves(query, n_results=n, where=where)
     if not results["ids"][0]:
         print("No results")
         return
@@ -28,8 +29,14 @@ def search_cves(query, n=5):
         print(f"\n  {doc[:200]}{'...' if len(doc) > 200 else ''}")
 
 
-def search_patches(query, n=5, language=None, full=False):
-    where = {"language": language} if language else None
+def search_patches(query, n=5, language=None, severity=None, full=False):
+    where = {}
+    if language:
+        where["language"] = language
+    if severity:
+        where["severity"] = severity
+    if not where:
+        where = None
     results = query_patches(query, n_results=n, where=where)
     if not results["ids"][0]:
         print("No results")
@@ -93,11 +100,21 @@ def main():
     p_cve = sub.add_parser("cves", help="Search CVE descriptions")
     p_cve.add_argument("query", help="Search query")
     p_cve.add_argument("-n", type=int, default=5)
+    p_cve.add_argument(
+        "--severity",
+        choices=["CRITICAL", "HIGH", "MEDIUM"],
+        help="Filter by severity",
+    )
 
     p_patch = sub.add_parser("patches", help="Search patched code")
     p_patch.add_argument("query", help="Search query")
     p_patch.add_argument("-n", type=int, default=5)
     p_patch.add_argument("--lang", help="Filter by language")
+    p_patch.add_argument(
+        "--severity",
+        choices=["CRITICAL", "HIGH", "MEDIUM"],
+        help="Filter by severity",
+    )
     p_patch.add_argument(
         "--full", action="store_true", help="Show full code without truncation"
     )
@@ -107,9 +124,11 @@ def main():
 
     args = parser.parse_args()
     if args.command == "cves":
-        search_cves(args.query, args.n)
+        search_cves(args.query, args.n, getattr(args, "severity", None))
     elif args.command == "patches":
-        search_patches(args.query, args.n, args.lang, args.full)
+        search_patches(
+            args.query, args.n, args.lang, getattr(args, "severity", None), args.full
+        )
     elif args.command == "show":
         show_cve(args.cve_id)
     else:
