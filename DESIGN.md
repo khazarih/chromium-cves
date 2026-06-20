@@ -105,11 +105,13 @@ python query.py show CVE-2022-3075
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | `{cve_id}::{file_path}` |
-| `document` | string | Patched code (added lines, embedded) |
+| `document` | string | `// Vulnerable code:\n{vulnerable}\n\n// Patched code:\n{patched}` (embedded) |
 | `metadata.cve_id` | string | Parent CVE |
 | `metadata.commit_hash` | string | Fix commit |
 | `metadata.file_path` | string | Source file path |
 | `metadata.language` | string | File extension (cpp, js, etc.) |
+| `metadata.vulnerable_code` | string | Removed lines (`-` in diff) — the vulnerable code |
+| `metadata.patched_code` | string | Added lines (`+` in diff) — the fixed code |
 
 ## Configuration
 

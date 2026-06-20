@@ -69,21 +69,24 @@ def extract_patched_code(files):
         if ext not in SOURCE_EXTS:
             continue
 
+        removed_lines = []
         added_lines = []
         for hunk in file_info["hunks"]:
             for line in hunk["lines"]:
-                if line.startswith("+") and not line.startswith("+++"):
+                if line.startswith("-") and not line.startswith("---"):
+                    removed_lines.append(line[1:])
+                elif line.startswith("+") and not line.startswith("+++"):
                     added_lines.append(line[1:])
 
         if not added_lines:
             continue
 
-        code = "\n".join(added_lines)
         patches.append(
             {
                 "file_path": path,
                 "language": ext.lstrip("."),
-                "code": code,
+                "vulnerable_code": "\n".join(removed_lines),
+                "patched_code": "\n".join(added_lines),
             }
         )
 
@@ -136,12 +139,14 @@ def extract_from_commits():
         return [
             {
                 "id": f"{cve_id}::{commit_hash[:12]}::{p['file_path']}",
-                "code": p["code"],
+                "document": f"// Vulnerable code:\n{p['vulnerable_code']}\n\n// Patched code:\n{p['patched_code']}",
                 "metadata": {
                     "cve_id": cve_id,
                     "commit_hash": commit_hash,
                     "file_path": p["file_path"],
                     "language": p["language"],
+                    "vulnerable_code": p["vulnerable_code"],
+                    "patched_code": p["patched_code"],
                 },
             }
             for p in patches
@@ -159,7 +164,7 @@ def extract_from_commits():
                     continue
                 existing_patch_ids.add(item["id"])
                 batch_ids.append(item["id"])
-                batch_docs.append(item["code"])
+                batch_docs.append(item["document"])
                 batch_metas.append(item["metadata"])
                 extracted += 1
 

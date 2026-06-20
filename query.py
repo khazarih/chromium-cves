@@ -24,7 +24,7 @@ def search_cves(query, n=5):
         print(f"\n  {doc[:200]}{'...' if len(doc) > 200 else ''}")
 
 
-def search_patches(query, n=5, language=None):
+def search_patches(query, n=5, language=None, full=False):
     where = {"language": language} if language else None
     results = query_patches(query, n_results=n, where=where)
     if not results["ids"][0]:
@@ -41,7 +41,18 @@ def search_patches(query, n=5, language=None):
         print(f"  {meta.get('cve_id', 'n/a')}  {meta.get('file_path', 'n/a')}")
         print(f"  Score: {score:.3f}  Language: {meta.get('language', 'n/a')}")
         print(f"  Commit: {meta.get('commit_hash', 'n/a')[:12]}")
-        print(f"\n{doc[:500]}{'...' if len(doc) > 500 else ''}")
+        vuln = meta.get("vulnerable_code", "")
+        patched = meta.get("patched_code", "")
+        if vuln:
+            print("\n--- Vulnerable code (before):")
+            print(vuln if full else vuln[:300] + ("..." if len(vuln) > 300 else ""))
+        if patched:
+            print("\n+++ Patched code (after):")
+            print(
+                patched
+                if full
+                else patched[:300] + ("..." if len(patched) > 300 else "")
+            )
 
 
 def show_cve(cve_id):
@@ -64,6 +75,9 @@ def main():
     p_patch.add_argument("query", help="Search query")
     p_patch.add_argument("-n", type=int, default=5)
     p_patch.add_argument("--lang", help="Filter by language")
+    p_patch.add_argument(
+        "--full", action="store_true", help="Show full code without truncation"
+    )
 
     p_show = sub.add_parser("show", help="Show CVE details")
     p_show.add_argument("cve_id", help="CVE ID (e.g. CVE-2022-3075)")
@@ -72,7 +86,7 @@ def main():
     if args.command == "cves":
         search_cves(args.query, args.n)
     elif args.command == "patches":
-        search_patches(args.query, args.n, args.lang)
+        search_patches(args.query, args.n, args.lang, args.full)
     elif args.command == "show":
         show_cve(args.cve_id)
     else:

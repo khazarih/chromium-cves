@@ -106,11 +106,13 @@ Patched source code embedded for code similarity search.
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | `{cve_id}::{hash}::{file_path}` |
-| `document` | string | Patched code (embedded) |
+| `document` | string | `// Vulnerable code:\n{vulnerable}\n\n// Patched code:\n{patched}` (embedded) |
 | `metadata.cve_id` | string | Parent CVE |
 | `metadata.commit_hash` | string | Fix commit hash |
 | `metadata.file_path` | string | Source file path |
 | `metadata.language` | string | `cpp`, `js`, `py`, etc. |
+| `metadata.vulnerable_code` | string | Removed lines (`-` in diff) — the vulnerable code |
+| `metadata.patched_code` | string | Added lines (`+` in diff) — the fixed code |
 
 ## Configuration
 
