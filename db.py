@@ -20,6 +20,20 @@ def get_patches_collection():
     )
 
 
+def get_experiments_collection():
+    return get_client().get_or_create_collection(
+        name=config.chroma_experiments_collection,
+        metadata={"hnsw:space": "cosine"},
+    )
+
+
+def get_mistakes_collection():
+    return get_client().get_or_create_collection(
+        name=config.chroma_mistakes_collection,
+        metadata={"hnsw:space": "cosine"},
+    )
+
+
 def upsert_cve(cve_id, description, metadata):
     get_cves_collection().upsert(
         ids=[cve_id],
@@ -44,6 +58,22 @@ def upsert_patches(ids, documents, metadatas):
     get_patches_collection().upsert(ids=ids, documents=documents, metadatas=metadatas)
 
 
+def add_experiment(experiment_id, findings, metadata):
+    get_experiments_collection().add(
+        ids=[experiment_id],
+        documents=[findings],
+        metadatas=[metadata],
+    )
+
+
+def add_mistake(mistake_id, description, metadata):
+    get_mistakes_collection().add(
+        ids=[mistake_id],
+        documents=[description],
+        metadatas=[metadata],
+    )
+
+
 def query_cves(query_text, n_results=5, where=None):
     kwargs = {"query_texts": [query_text], "n_results": n_results}
     if where:
@@ -56,6 +86,20 @@ def query_patches(query_text, n_results=5, where=None):
     if where:
         kwargs["where"] = where
     return get_patches_collection().query(**kwargs)
+
+
+def query_experiments(query_text, n_results=5, where=None):
+    kwargs = {"query_texts": [query_text], "n_results": n_results}
+    if where:
+        kwargs["where"] = where
+    return get_experiments_collection().query(**kwargs)
+
+
+def query_mistakes(query_text, n_results=5, where=None):
+    kwargs = {"query_texts": [query_text], "n_results": n_results}
+    if where:
+        kwargs["where"] = where
+    return get_mistakes_collection().query(**kwargs)
 
 
 def get_existing_cve_ids():

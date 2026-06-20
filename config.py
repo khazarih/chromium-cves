@@ -15,6 +15,12 @@ class Config:
         self.chroma_patches_collection = os.environ.get(
             "CHROMA_PATCHES_COLLECTION", "chromium_patches"
         )
+        self.chroma_experiments_collection = os.environ.get(
+            "CHROMA_EXPERIMENTS_COLLECTION", "chromium_experiments"
+        )
+        self.chroma_mistakes_collection = os.environ.get(
+            "CHROMA_MISTAKES_COLLECTION", "chromium_mistakes"
+        )
 
 
 config = Config()

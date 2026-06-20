@@ -36,6 +36,24 @@ graph TD
 
 ## Setup
 
+### Quick Start (Recommended)
+
+```bash
+# Clone and run automated setup
+git clone git@github.com:khazarih/chromium-cves.git
+cd chromium-cves
+./setup.sh
+```
+
+The setup script will:
+- Check prerequisites (Docker, Python 3.10+)
+- Clone cvelistV5 data repository
+- Install Python dependencies
+- Start ChromaDB container
+- Run the full CVE collection pipeline
+
+### Manual Setup
+
 ```bash
 # Clone
 git clone git@github.com:khazarih/chromium-cves.git
@@ -117,6 +135,38 @@ Patched source code embedded with vulnerability context for semantic search.
 | `metadata.vulnerable_code` | string | Removed lines (`-` in diff) — the vulnerable code |
 | `metadata.patched_code` | string | Added lines (`+` in diff) — the fixed code |
 
+### `chromium_experiments` collection (for AI agents)
+
+Agent experiment history and results.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | `{cve_id}::{date}` |
+| `document` | string | Experiment findings (embedded) |
+| `metadata.cve_id` | string | Parent CVE |
+| `metadata.date` | string | Experiment date |
+| `metadata.success` | bool | Whether exploit succeeded |
+| `metadata.time_hours` | float | Time spent |
+| `metadata.environment` | string | Test environment |
+| `metadata.tools` | list | Tools used |
+| `metadata.findings` | string | What was found |
+| `metadata.mistakes` | list | Mistakes made |
+| `metadata.lessons` | list | Lessons learned |
+
+### `chromium_mistakes` collection (for AI agents)
+
+Mistakes to avoid in future research.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique mistake ID |
+| `document` | string | Mistake description (embedded) |
+| `metadata.cve_type` | string | Vulnerability type |
+| `metadata.wrong` | string | Wrong assumption |
+| `metadata.correct` | string | Correct approach |
+| `metadata.frequency` | int | How often this mistake occurs |
+| `metadata.last_seen` | string | Last occurrence date |
+
 ## Configuration
 
 All settings via environment variables (`.env`):
@@ -128,20 +178,25 @@ All settings via environment variables (`.env`):
 | `CHROMA_PORT` | `8001` | ChromaDB port |
 | `CHROMA_CVES_COLLECTION` | `chromium_cves` | CVE collection name |
 | `CHROMA_PATCHES_COLLECTION` | `chromium_patches` | Patches collection name |
+| `CHROMA_EXPERIMENTS_COLLECTION` | `chromium_experiments` | Experiments collection name |
+| `CHROMA_MISTAKES_COLLECTION` | `chromium_mistakes` | Mistakes collection name |
 
 ## Project Structure
 
 ```
 .
-├── collector.py        # Stage 1: CVE collection
-├── resolver.py         # Stage 2: Bug → commit resolution
-├── extractor.py        # Stage 3: Patch extraction
-├── query.py            # Stage 4: Semantic search CLI
-├── db.py               # ChromaDB interface
-├── config.py           # Environment config
-├── docker-compose.yml  # ChromaDB container
-├── DESIGN.md           # Detailed architecture docs
+├── setup.sh             # Automated setup script
+├── collector.py         # Stage 1: CVE collection
+├── resolver.py          # Stage 2: Bug → commit resolution
+├── extractor.py         # Stage 3: Patch extraction
+├── query.py             # Stage 4: Semantic search CLI
+├── db.py                # ChromaDB interface
+├── config.py            # Environment config
+├── docker-compose.yml   # ChromaDB container
+├── DESIGN.md            # Detailed architecture docs
+├── AGENT_GUIDE.md       # AI agent usage guide
 ├── pyproject.toml
 ├── .env
-└── cvelistV5/          # CVE data (separate clone)
+├── .env.example
+└── cvelistV5/           # CVE data (separate clone)
 ```
