@@ -6,30 +6,73 @@ A pipeline that collects Chromium CVEs, resolves them to fix commits, extracts p
 
 ## Architecture
 
+```mermaid
+graph TD
+    subgraph "Data Source"
+        A[cvelistV5<br/>CVE JSON files]
+    end
+
+    subgraph "Pipeline"
+        B[collector.py<br/>Filter & Store CVEs]
+        C[resolver.py<br/>Bug ID → Commit Hash]
+        D[extractor.py<br/>Extract Patched Code]
+    end
+
+    subgraph "Storage"
+        E[(ChromaDB<br/>2 Collections)]
+        F[chromium_cves<br/>CVE descriptions + severity]
+        G[chromium_patches<br/>Code + context]
+    end
+
+    subgraph "Query Interface"
+        H[query.py<br/>Semantic Search CLI]
+    end
+
+    A -->|Walk directories| B
+    B -->|Store CVE metadata| E
+    E -->|Read bug_ids| C
+    C -->|Query gitiles API| C
+    C -->|Store commit_hashes| E
+    E -->|Read commit_hashes| D
+    D -->|Fetch diffs from gitiles| D
+    D -->|Store patches + context| E
+    E --> F
+    E --> G
+    E -->|Semantic search| H
+
+    style A fill:#e1f5fe
+    style E fill:#f3e5f5
+    style H fill:#e8f5e9
 ```
-cvelistV5 (git submodule)
-    │
-    ▼
-┌──────────┐    ┌──────────┐    ┌──────────┐
-│ collector │───▶│ resolver │───▶│extractor │
-│           │    │          │    │          │
-│ CVE JSON  │    │ bug→commit│   │ commit   │
-│ → Chroma  │    │ via gitiles│  │ → code   │
-└──────────┘    └──────────┘    └──────────┘
-                                      │
-                                      ▼
-                                 ┌──────────┐
-                                 │ ChromaDB │
-                                 │          │
-                                 │ 2 collec-│
-                                 │ tions    │
-                                 └──────────┘
-                                      │
-                                      ▼
-                                 ┌──────────┐
-                                 │  query   │
-                                 │  (CLI)   │
-                                 └──────────┘
+
+### Pipeline Flow
+
+```mermaid
+flowchart LR
+    subgraph "Stage 1: Collect"
+        A1[Parse cvelistV5 JSON] --> A2{Is Chromium CVE?}
+        A2 -->|Yes| A3[Extract metadata]
+        A2 -->|No| A4[Skip]
+        A3 --> A5[Infer severity]
+        A5 --> A6[Store in chromium_cves]
+    end
+
+    subgraph "Stage 2: Resolve"
+        B1[Get CVEs with bug_ids] --> B2[Query gitiles API]
+        B2 --> B3[Filter noise commits]
+        B3 --> B4[Store commit_hashes]
+    end
+
+    subgraph "Stage 3: Extract"
+        C1[Get CVEs with commits] --> C2[Fetch diff from gitiles]
+        C2 --> C3[Parse unified diff]
+        C3 --> C4[Extract + and - lines]
+        C4 --> C5[Fetch commit message]
+        C5 --> C6[Store enriched patch]
+    end
+
+    A6 --> B1
+    B4 --> C1
 ```
 
 ## Stages
@@ -84,7 +127,54 @@ python query.py patches "use after free in net/" --lang cpp -n 3
 python query.py show CVE-2022-3075
 ```
 
-## ChromaDB Schema
+## Data Flow
+
+```mermaid
+graph LR
+    subgraph "Input"
+        A[cvelistV5<br/>359K+ CVE files]
+    end
+
+    subgraph "Filtering"
+        B[Keyword matching<br/>15 patterns]
+        C[Reference domains<br/>4 domains]
+        D[Vendor/product<br/>Google + Chrome]
+    end
+
+    subgraph "Enrichment"
+        E[Severity inference<br/>Pattern matching]
+        F[Bug ID extraction<br/>crbug.com URLs]
+        G[Commit resolution<br/>gitiles API]
+    end
+
+    subgraph "Extraction"
+        H[Diff parsing<br/>Unified format]
+        I[Code extraction<br/>+/- lines]
+        J[Context gathering<br/>Commit message]
+    end
+
+    subgraph "Storage"
+        K[(ChromaDB<br/>3,510 CVEs<br/>422 patches)]
+    end
+
+    subgraph "Output"
+        L[Semantic search<br/>CLI interface]
+    end
+
+    A --> B
+    A --> C
+    A --> D
+    B --> E
+    C --> F
+    D --> E
+    E --> G
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+    K --> L
+```
 
 ### Collection: `chromium_cves`
 

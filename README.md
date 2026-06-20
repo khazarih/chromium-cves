@@ -4,26 +4,19 @@ Collects Chromium ecosystem CVEs, resolves them to fix commits, extracts patched
 
 ## Architecture
 
-```
-cvelistV5 (git submodule)
-    │
-    ▼
-┌──────────┐    ┌──────────┐    ┌──────────┐
-│ collector │───▶│ resolver │───▶│extractor │
-│           │    │          │    │          │
-│ CVE JSON  │    │bug→commit│   │ commit   │
-│ → Chroma  │    │via gitiles│  │ → code   │
-└──────────┘    └──────────┘    └──────────┘
-                                      │
-                                      ▼
-                                 ┌──────────┐
-                                 │ ChromaDB │
-                                 └──────────┘
-                                      │
-                                      ▼
-                                 ┌──────────┐
-                                 │  query   │
-                                 └──────────┘
+```mermaid
+graph TD
+    A[cvelistV5] --> B[collector.py]
+    B --> C[ChromaDB]
+    C --> D[resolver.py]
+    D --> C
+    C --> E[extractor.py]
+    E --> C
+    C --> F[query.py]
+    
+    style A fill:#e1f5fe
+    style C fill:#f3e5f5
+    style F fill:#e8f5e9
 ```
 
 **Four independent stages**, each incremental (skips already-processed data):
