@@ -3,7 +3,7 @@ import time
 import re
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from db import get_cves_collection, get_existing_commit_hashes
+from db import get_cves_collection
 
 GITILES_LOG_URL = "https://chromium.googlesource.com/chromium/src/+log"
 GITILES_PREFIX = ")]}'"
@@ -45,50 +45,70 @@ def query_gitiles(bug_id, retries=2):
 def resolve_cves():
     col = get_cves_collection()
     results = col.get(include=["metadatas"])
-    existing_commits = get_existing_commit_hashes()
 
     to_resolve = []
+    already_done = 0
     for cve_id, metadata in zip(results["ids"], results["metadatas"]):
         bug_ids = metadata.get("bug_ids") or []
         commit_hashes = metadata.get("commit_hashes") or []
         if not bug_ids:
             continue
-        if commit_hashes and all(h in existing_commits for h in commit_hashes):
+        if commit_hashes:
+            already_done += 1
             continue
         to_resolve.append((cve_id, metadata))
 
     if not to_resolve:
-        print("Nothing to resolve")
+        print(
+            f"Nothing to resolve — all {already_done} CVEs with bugs already resolved"
+        )
         return
 
-    print(f"Resolving {len(to_resolve)} CVEs...")
+    print(f"Resolving {len(to_resolve)} CVEs ({already_done} already done)...")
+
     resolved = 0
+    errors = 0
+    start = time.time()
 
     def resolve_one(args):
         cve_id, metadata = args
         bug_ids = metadata.get("bug_ids") or []
-        existing_hashes = set(metadata.get("commit_hashes") or [])
+        new_hashes = set()
         for bug_id in bug_ids:
             commits = query_gitiles(bug_id)
             for h in commits:
-                if h not in existing_hashes:
-                    existing_hashes.add(h)
-        return cve_id, existing_hashes
+                new_hashes.add(h)
+        return cve_id, new_hashes
 
     with ThreadPoolExecutor(max_workers=20) as pool:
         futures = {pool.submit(resolve_one, item): item for item in to_resolve}
         for future in as_completed(futures):
-            cve_id, new_hashes = future.result()
+            try:
+                cve_id, new_hashes = future.result()
+            except Exception:
+                errors += 1
+                continue
+
             if new_hashes:
                 metadata = futures[future][1]
-                updated = {**metadata, "commit_hashes": sorted(new_hashes)}
+                existing = set(metadata.get("commit_hashes") or [])
+                updated = {**metadata, "commit_hashes": sorted(existing | new_hashes)}
                 col.update(ids=[cve_id], metadatas=[updated])
-                existing_commits.update(new_hashes)
                 resolved += 1
-            if resolved % 100 == 0 and resolved > 0:
-                print(f"  resolved {resolved}/{len(to_resolve)}...")
 
-    print(f"Resolved {resolved} CVEs with commit hashes")
+            done = resolved + errors
+            if done % 50 == 0 or done == len(to_resolve):
+                elapsed = time.time() - start
+                rate = done / elapsed if elapsed > 0 else 0
+                eta = (len(to_resolve) - done) / rate if rate > 0 else 0
+                print(
+                    f"  {done}/{len(to_resolve)} "
+                    f"({resolved} resolved, {errors} errors) "
+                    f"[{rate:.1f}/s, ETA {eta:.0f}s]",
+                    end="\r",
+                )
+
+    print(f"\nResolved {resolved} CVEs ({errors} errors)")
 
 
 if __name__ == "__main__":

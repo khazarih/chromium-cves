@@ -122,28 +122,32 @@ def process_dir(args):
 
 
 def main():
-    print("Collecting CVEs...")
     existing = get_existing_cve_ids()
 
-    tasks = []
+    all_files = []
     for root, _, filenames in os.walk(config.cves):
-        cves = [
-            f
-            for f in filenames
-            if CVE_RE.match(f) and f.removesuffix(".json") not in existing
-        ]
-        if cves:
-            tasks.append((root, cves, existing))
+        for f in filenames:
+            if CVE_RE.match(f) and f.removesuffix(".json") not in existing:
+                all_files.append((root, f))
 
-    if not tasks:
-        print("Nothing to do")
+    if not all_files:
+        print("Nothing to do — all CVEs already collected")
         return
 
+    print(f"Found {len(all_files)} new CVE files, filtering for Chromium...")
+
+    dir_map = {}
+    for root, f in all_files:
+        dir_map.setdefault(root, []).append(f)
+    tasks = [(root, files, existing) for root, files in dir_map.items()]
+
     written = 0
+    scanned = 0
     batch_ids, batch_docs, batch_metas = [], [], []
 
     with ProcessPoolExecutor() as pool:
         for batch in pool.map(process_dir, tasks):
+            scanned += 1
             for item in batch:
                 batch_ids.append(item["id"])
                 batch_docs.append(item["document"])
@@ -154,10 +158,13 @@ def main():
                     upsert_cves(batch_ids, batch_docs, batch_metas)
                     batch_ids, batch_docs, batch_metas = [], [], []
 
+            if scanned % 50 == 0 or scanned == len(tasks):
+                print(f"  [{scanned}/{len(tasks)}] dirs, {written} collected", end="\r")
+
     if batch_ids:
         upsert_cves(batch_ids, batch_docs, batch_metas)
 
-    print(f"Collected {written} CVEs")
+    print(f"\nCollected {written} CVEs")
 
 
 if __name__ == "__main__":

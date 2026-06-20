@@ -3,13 +3,11 @@ import re
 import time
 import requests
 from concurrent.futures import ThreadPoolExecutor
-from db import get_cves_collection, get_patches_collection, get_existing_commit_hashes
+from db import get_cves_collection, get_patches_collection
 
 GITILES_DIFF_URL = (
     "https://chromium.googlesource.com/chromium/src/+diff/{commit}%5E%21/?format=TEXT"
 )
-GITILES_PREFIX = ")]}'"
-RATE_LIMIT_DELAY = 0.3
 
 SOURCE_EXTS = {
     ".cc",
@@ -97,24 +95,36 @@ def extract_from_commits():
     patches_col = get_patches_collection()
     results = cves_col.get(include=["metadatas"])
 
-    existing_commits = get_existing_commit_hashes()
+    existing_patch_ids = set(patches_col.get(include=[])["ids"] or [])
 
     to_extract = []
     for cve_id, metadata in zip(results["ids"], results["metadatas"]):
         commit_hashes = metadata.get("commit_hashes") or []
         if not commit_hashes:
             continue
-        pending = [h for h in commit_hashes if h not in existing_commits]
+        pending = []
+        for h in commit_hashes:
+            prefix = f"{cve_id}::{h[:12]}"
+            if not any(pid.startswith(prefix) for pid in existing_patch_ids):
+                pending.append(h)
         if not pending:
             continue
-        to_extract.append((cve_id, metadata, pending))
+        to_extract.append((cve_id, pending))
 
     if not to_extract:
-        print("Nothing to extract")
+        print("Nothing to extract — all patches already collected")
         return
 
-    print(f"Extracting patches from {len(to_extract)} CVEs...")
+    tasks = []
+    for cve_id, hashes in to_extract:
+        for h in hashes[:5]:
+            tasks.append((cve_id, h))
+
+    print(f"Extracting patches: {len(to_extract)} CVEs, {len(tasks)} commits")
+
     extracted = 0
+    skipped = 0
+    start = time.time()
 
     def process_commit(args):
         cve_id, commit_hash = args
@@ -123,43 +133,31 @@ def extract_from_commits():
             return []
         files = parse_diff(diff_text)
         patches = extract_patched_code(files)
-        results = []
-        for patch in patches:
-            patch_id = f"{cve_id}::{commit_hash[:12]}::{patch['file_path']}"
-            results.append(
-                {
-                    "id": patch_id,
-                    "code": patch["code"],
-                    "metadata": {
-                        "cve_id": cve_id,
-                        "commit_hash": commit_hash,
-                        "file_path": patch["file_path"],
-                        "language": patch["language"],
-                    },
-                }
-            )
-        return results
-
-    tasks = []
-    for cve_id, _, hashes in to_extract:
-        for h in hashes[:5]:
-            tasks.append((cve_id, h))
+        return [
+            {
+                "id": f"{cve_id}::{commit_hash[:12]}::{p['file_path']}",
+                "code": p["code"],
+                "metadata": {
+                    "cve_id": cve_id,
+                    "commit_hash": commit_hash,
+                    "file_path": p["file_path"],
+                    "language": p["language"],
+                },
+            }
+            for p in patches
+        ]
 
     batch_ids, batch_docs, batch_metas = [], [], []
-    seen_ids = set()
-    done = 0
 
     with ThreadPoolExecutor(max_workers=20) as pool:
         for results in pool.map(process_commit, tasks):
-            done += 1
-            if done % 50 == 0:
-                print(
-                    f"  {done}/{len(tasks)} commits processed, {extracted} patches..."
-                )
+            if not results:
+                skipped += 1
             for item in results:
-                if item["id"] in seen_ids:
+                if item["id"] in existing_patch_ids:
+                    skipped += 1
                     continue
-                seen_ids.add(item["id"])
+                existing_patch_ids.add(item["id"])
                 batch_ids.append(item["id"])
                 batch_docs.append(item["code"])
                 batch_metas.append(item["metadata"])
@@ -172,7 +170,18 @@ def extract_from_commits():
                         metadatas=batch_metas,
                     )
                     batch_ids, batch_docs, batch_metas = [], [], []
-            time.sleep(RATE_LIMIT_DELAY)
+
+            done = extracted + skipped
+            if done % 25 == 0 or done == len(tasks):
+                elapsed = time.time() - start
+                rate = done / elapsed if elapsed > 0 else 0
+                eta = (len(tasks) - done) / rate if rate > 0 else 0
+                print(
+                    f"  {done}/{len(tasks)} commits "
+                    f"({extracted} patches, {skipped} skipped) "
+                    f"[{rate:.1f}/s, ETA {eta:.0f}s]",
+                    end="\r",
+                )
 
     if batch_ids:
         patches_col.upsert(
@@ -181,7 +190,7 @@ def extract_from_commits():
             metadatas=batch_metas,
         )
 
-    print(f"Extracted {extracted} patches")
+    print(f"\nExtracted {extracted} patches ({skipped} skipped)")
 
 
 if __name__ == "__main__":
