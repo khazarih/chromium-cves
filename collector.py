@@ -42,6 +42,37 @@ COMMIT_RE = re.compile(
     r"chromium\.googlesource\.com/(?:chromium/src|[^/]+(?:/[^/]+)?)/\+/([0-9a-f]{40})"
 )
 
+SEVERITY_PATTERNS = {
+    "CRITICAL": [
+        "remote code execution",
+        "arbitrary code execution",
+        "type confusion",
+        "sandbox escape",
+        "code injection",
+    ],
+    "HIGH": [
+        "heap corruption",
+        "buffer overflow",
+        "use after free",
+        "out of bounds",
+        "stack overflow",
+        "integer overflow",
+        "uninitialized",
+        "stack-buffer-overflow",
+        "heap-buffer-overflow",
+    ],
+    "MEDIUM": ["denial of service", "information disclosure", "integer overflow"],
+}
+
+
+def infer_severity(description, vuln_types):
+    combined = f"{description.lower()} {' '.join(vuln_types).lower()}"
+    for level in ["CRITICAL", "HIGH", "MEDIUM"]:
+        for pattern in SEVERITY_PATTERNS[level]:
+            if pattern in combined:
+                return level
+    return "LOW"
+
 
 def parse_references(references):
     bug_ids = set()
@@ -99,13 +130,23 @@ def process_dir(args):
         urls = [r.get("url", "") for r in references]
         bug_ids, commit_hashes = parse_references(references)
 
+        vuln_types = [
+            pt["descriptions"][0]["description"]
+            for pt in cna.get("problemTypes", [])
+            if pt.get("descriptions")
+        ]
+        severity = infer_severity(description, vuln_types)
+
         metadata = {
             "date_published": meta.get("datePublished", ""),
             "state": meta.get("state", ""),
             "vendors": vendors,
             "products": products,
             "references": urls,
+            "severity": severity,
         }
+        if vuln_types:
+            metadata["problem_types"] = vuln_types
         if bug_ids:
             metadata["bug_ids"] = bug_ids
         if commit_hashes:

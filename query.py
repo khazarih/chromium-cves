@@ -15,8 +15,12 @@ def search_cves(query, n=5):
         results["distances"][0],
     ):
         score = 1 - dist
+        severity = meta.get("severity", "n/a")
+        problem_types = meta.get("problem_types", [])
+        pt_str = " | ".join(problem_types) if problem_types else "n/a"
+
         print(f"\n{'=' * 60}")
-        print(f"  {cve_id}  (score: {score:.3f})")
+        print(f"  {cve_id} | {pt_str} | {severity}  (score: {score:.3f})")
         print(f"  Published: {meta.get('date_published', 'n/a')}")
         print(f"  Products:  {', '.join(meta.get('products', []))}")
         print(f"  Bug IDs:   {', '.join(meta.get('bug_ids', []))}")
@@ -37,10 +41,29 @@ def search_patches(query, n=5, language=None, full=False):
         results["distances"][0],
     ):
         score = 1 - dist
+        severity = meta.get("severity", "n/a")
+        problem_types = meta.get("problem_types", [])
+        pt_str = " | ".join(problem_types) if problem_types else "n/a"
+
         print(f"\n{'=' * 60}")
-        print(f"  {meta.get('cve_id', 'n/a')}  {meta.get('file_path', 'n/a')}")
-        print(f"  Score: {score:.3f}  Language: {meta.get('language', 'n/a')}")
-        print(f"  Commit: {meta.get('commit_hash', 'n/a')[:12]}")
+        print(f"  {meta.get('cve_id', 'n/a')} | {pt_str} | {severity}")
+        print(f"  {meta.get('file_path', 'n/a')}  ({meta.get('language', 'n/a')})")
+        print(f"  Score: {score:.3f}  Commit: {meta.get('commit_hash', 'n/a')[:12]}")
+
+        cve_desc = meta.get("cve_description", "")
+        if cve_desc:
+            print("\n  CVE Description:")
+            print(
+                f"  {cve_desc if full else cve_desc[:200] + ('...' if len(cve_desc) > 200 else '')}"
+            )
+
+        commit_msg = meta.get("commit_message", "")
+        if commit_msg:
+            msg_preview = commit_msg.split("\n")[:3]
+            print("\n  Commit Message:")
+            for line in msg_preview:
+                print(f"  {line}")
+
         vuln = meta.get("vulnerable_code", "")
         patched = meta.get("patched_code", "")
         if vuln:

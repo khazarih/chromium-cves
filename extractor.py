@@ -1,4 +1,5 @@
 import base64
+import json
 import re
 import time
 import requests
@@ -7,6 +8,9 @@ from db import get_cves_collection, get_patches_collection
 
 GITILES_DIFF_URL = (
     "https://chromium.googlesource.com/chromium/src/+diff/{commit}%5E%21/?format=TEXT"
+)
+GITILES_LOG_URL = (
+    "https://chromium.googlesource.com/chromium/src/+log/{commit}?format=JSON"
 )
 
 SOURCE_EXTS = {
@@ -36,6 +40,20 @@ def fetch_diff(commit_hash):
         return base64.b64decode(resp.text).decode("utf-8", errors="replace")
     except requests.RequestException:
         return None
+
+
+def fetch_commit_message(commit_hash):
+    url = GITILES_LOG_URL.format(commit=commit_hash)
+    try:
+        resp = requests.get(url, timeout=30)
+        if resp.status_code != 200:
+            return ""
+        data = json.loads(resp.text.removeprefix(")]}'\n"))
+        if data.get("log"):
+            return data["log"][0].get("message", "")
+        return ""
+    except requests.RequestException, json.JSONDecodeError, KeyError:
+        return ""
 
 
 def parse_diff(diff_text):
@@ -96,12 +114,15 @@ def extract_patched_code(files):
 def extract_from_commits():
     cves_col = get_cves_collection()
     patches_col = get_patches_collection()
-    results = cves_col.get(include=["metadatas"])
+    cves_data = cves_col.get(include=["metadatas"])
 
     existing_patch_ids = set(patches_col.get(include=[])["ids"] or [])
 
+    # Build CVE metadata lookup
+    cve_meta_lookup = {}
     to_extract = []
-    for cve_id, metadata in zip(results["ids"], results["metadatas"]):
+    for cve_id, metadata in zip(cves_data["ids"], cves_data["metadatas"]):
+        cve_meta_lookup[cve_id] = metadata
         commit_hashes = metadata.get("commit_hashes") or []
         if not commit_hashes:
             continue
@@ -136,21 +157,66 @@ def extract_from_commits():
             return []
         files = parse_diff(diff_text)
         patches = extract_patched_code(files)
-        return [
-            {
-                "id": f"{cve_id}::{commit_hash[:12]}::{p['file_path']}",
-                "document": f"// Vulnerable code:\n{p['vulnerable_code']}\n\n// Patched code:\n{p['patched_code']}",
-                "metadata": {
-                    "cve_id": cve_id,
-                    "commit_hash": commit_hash,
-                    "file_path": p["file_path"],
-                    "language": p["language"],
-                    "vulnerable_code": p["vulnerable_code"],
-                    "patched_code": p["patched_code"],
-                },
+        if not patches:
+            return []
+
+        # Fetch commit message
+        commit_message = fetch_commit_message(commit_hash)
+
+        # Get CVE metadata
+        meta = cve_meta_lookup.get(cve_id, {})
+        cve_description = meta.get("description", "")
+        problem_types = meta.get("problem_types", [])
+        severity = meta.get("severity", "LOW")
+
+        # Build enriched document
+        header = f"CVE: {cve_id}"
+        if problem_types:
+            header += f" | {' | '.join(problem_types)}"
+        header += f" | Severity: {severity}"
+
+        parts = [header]
+        if cve_description:
+            parts.append(cve_description)
+        if commit_message:
+            # Use first 3 lines of commit message as summary
+            msg_lines = commit_message.strip().split("\n")
+            parts.append("Commit: " + "\n".join(msg_lines[:3]))
+
+        base_doc = "\n\n".join(parts)
+
+        results = []
+        for p in patches:
+            doc_parts = [base_doc]
+            if p["vulnerable_code"]:
+                doc_parts.append(f"--- Vulnerable code:\n{p['vulnerable_code']}")
+            if p["patched_code"]:
+                doc_parts.append(f"+++ Patched code:\n{p['patched_code']}")
+
+            metadata = {
+                "cve_id": cve_id,
+                "commit_hash": commit_hash,
+                "file_path": p["file_path"],
+                "language": p["language"],
+                "vulnerable_code": p["vulnerable_code"],
+                "patched_code": p["patched_code"],
+                "severity": severity,
             }
-            for p in patches
-        ]
+            if commit_message:
+                metadata["commit_message"] = commit_message[:2000]
+            if cve_description:
+                metadata["cve_description"] = cve_description
+            if problem_types:
+                metadata["problem_types"] = problem_types
+
+            results.append(
+                {
+                    "id": f"{cve_id}::{commit_hash[:12]}::{p['file_path']}",
+                    "document": "\n\n".join(doc_parts),
+                    "metadata": metadata,
+                }
+            )
+        return results
 
     batch_ids, batch_docs, batch_metas = [], [], []
 

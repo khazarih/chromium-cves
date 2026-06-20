@@ -99,17 +99,23 @@ python query.py show CVE-2022-3075
 | `metadata.references` | list[string] | All reference URLs |
 | `metadata.bug_ids` | list[string] | Chromium bug tracker IDs |
 | `metadata.commit_hashes` | list[string] | Resolved fix commit hashes |
+| `metadata.problem_types` | list[string] | e.g. `["Heap buffer overflow", "Use after free"]` |
+| `metadata.severity` | string | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` (inferred from description) |
 
 ### Collection: `chromium_patches`
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | `{cve_id}::{file_path}` |
-| `document` | string | `// Vulnerable code:\n{vulnerable}\n\n// Patched code:\n{patched}` (embedded) |
+| `id` | string | `{cve_id}::{hash}::{file_path}` |
+| `document` | string | CVE info + commit message + code (embedded) |
 | `metadata.cve_id` | string | Parent CVE |
 | `metadata.commit_hash` | string | Fix commit |
 | `metadata.file_path` | string | Source file path |
 | `metadata.language` | string | File extension (cpp, js, etc.) |
+| `metadata.severity` | string | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
+| `metadata.problem_types` | list[string] | Vulnerability types |
+| `metadata.cve_description` | string | Full CVE description |
+| `metadata.commit_message` | string | Git commit message explaining the fix |
 | `metadata.vulnerable_code` | string | Removed lines (`-` in diff) — the vulnerable code |
 | `metadata.patched_code` | string | Added lines (`+` in diff) — the fixed code |
 

@@ -98,19 +98,25 @@ CVE descriptions embedded for semantic search.
 | `metadata.references` | list | Reference URLs |
 | `metadata.bug_ids` | list | Chromium bug tracker IDs |
 | `metadata.commit_hashes` | list | Resolved fix commits |
+| `metadata.problem_types` | list | e.g. `["Heap buffer overflow", "Use after free"]` |
+| `metadata.severity` | string | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
 
 ### `chromium_patches` collection
 
-Patched source code embedded for code similarity search.
+Patched source code embedded with vulnerability context for semantic search.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | `{cve_id}::{hash}::{file_path}` |
-| `document` | string | `// Vulnerable code:\n{vulnerable}\n\n// Patched code:\n{patched}` (embedded) |
+| `document` | string | CVE info + commit message + vulnerable/patched code (embedded) |
 | `metadata.cve_id` | string | Parent CVE |
 | `metadata.commit_hash` | string | Fix commit hash |
 | `metadata.file_path` | string | Source file path |
 | `metadata.language` | string | `cpp`, `js`, `py`, etc. |
+| `metadata.severity` | string | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
+| `metadata.problem_types` | list | Vulnerability types from NVD |
+| `metadata.cve_description` | string | Full CVE description |
+| `metadata.commit_message` | string | Git commit message explaining the fix |
 | `metadata.vulnerable_code` | string | Removed lines (`-` in diff) — the vulnerable code |
 | `metadata.patched_code` | string | Added lines (`+` in diff) — the fixed code |
 
