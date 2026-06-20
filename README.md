@@ -74,6 +74,10 @@ python query.py patches "use after free" --lang cpp -n 3
 python query.py show CVE-2022-3075
 ```
 
+## AI Agent Integration
+
+See [AGENT_GUIDE.md](AGENT_GUIDE.md) for how AI agents can use this database for vulnerability research, code review, and security analysis.
+
 ## ChromaDB Schema
 
 ### `chromium_cves` collection
